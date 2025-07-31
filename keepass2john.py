@@ -9,6 +9,12 @@ from binascii import hexlify
 def stringify_hex(hex_bytes: bytes):
     return hexlify(hex_bytes).decode("utf-8")
 
+def safe_unpack(fmt, data, index):
+    size = struct.calcsize(fmt)
+    if index + size > len(data):
+        raise ValueError("Insufficient data length for unpacking.")
+    return struct.unpack(fmt, data[index:index+size])[0], index + size
+
 
 def process_1x_database(data, database_name, max_inline_size=1024):
     index = 8
@@ -90,30 +96,45 @@ def process_2x_database(data, database_name):
     }
 
     while not end_reached:
-        btFieldID = struct.unpack("B", data[index:index+1])[0]
-        index += 1
-        uSize = struct.unpack("H", data[index:index+2])[0]
-        index += 2
+
+        btFieldID, index = safe_unpack("B", data, index)
+
+        # btFieldID = struct.unpack("B", data[index:index+1])[0]
+        # index += 1
+
+        uSize, index = safe_unpack("H", data, index)
+
+        # uSize = struct.unpack("H", data[index:index+2])[0]
+        # index += 2
 
         if btFieldID == FIELD_IDs["END"]:
             end_reached = True
 
         elif btFieldID == FIELD_IDs["MASTER_SEED"]:
             master_seed = stringify_hex(data[index:index+uSize])
+            index += uSize
 
         elif btFieldID == FIELD_IDs["TRANSFORM_SEED"]:
             transform_seed = stringify_hex(data[index:index+uSize])
+            index += uSize
 
         elif btFieldID == FIELD_IDs["TRANSFORM_ROUNDS"]:
-            transform_rounds = struct.unpack("Q", data[index:index+8])[0]
+            # fFor transform_rounds, uSize should always be 8.
+            if uSize != 8:
+                raise ValueError("Invalid uSize for field 'transform_rounds'.")
+            transform_rounds, index = safe_unpack("Q", data, index)
 
         elif btFieldID == FIELD_IDs["IV_PARAMETERS"]:
             iv_parameters = stringify_hex(data[index:index+uSize])
+            index += uSize
 
         elif btFieldID == FIELD_IDs["EXPECTED_START_BYTES"]:
             expected_start_bytes = stringify_hex(data[index:index+uSize])
+            index += uSize
 
-        index += uSize
+        else:
+            # Skip unknown field ids.
+            index += uSize
 
     dataStartOffset = index
     firstEncryptedBytes = stringify_hex(data[index:index+32])
