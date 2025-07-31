@@ -9,6 +9,12 @@ from binascii import hexlify
 def stringify_hex(hex_bytes: bytes):
     return hexlify(hex_bytes).decode("utf-8")
 
+def safe_unpack(fmt, data, index):
+    size = struct.calcsize(fmt)
+    if index + size > len(data):
+        raise ValueError("Insufficient data length for unpacking.")
+    return struct.unpack(fmt, data[index:index+size])[0], index + size
+
 
 def process_1x_database(data, database_name, max_inline_size=1024):
     index = 8
@@ -80,31 +86,57 @@ def process_2x_database(data, database_name):
     iv_parameters = b''
     expected_start_bytes = b''
 
-    while not end_reached:
-        btFieldID = struct.unpack("B", data[index:index+1])[0]
-        index += 1
-        uSize = struct.unpack("H", data[index:index+2])[0]
-        index += 2
+    FIELD_IDs = {
+        'END': 0,
+        'MASTER_SEED': 4,
+        'TRANSFORM_SEED': 5,
+        'TRANSFORM_ROUNDS': 6,
+        'IV_PARAMETERS': 7,
+        'EXPECTED_START_BYTES': 9
+    }
 
-        if btFieldID == 0:
+    while not end_reached:
+
+        btFieldID, index = safe_unpack("B", data, index)
+
+        # btFieldID = struct.unpack("B", data[index:index+1])[0]
+        # index += 1
+
+        uSize, index = safe_unpack("H", data, index)
+
+        # uSize = struct.unpack("H", data[index:index+2])[0]
+        # index += 2
+
+        if btFieldID == FIELD_IDs["END"]:
             end_reached = True
 
-        if btFieldID == 4:
+        elif btFieldID == FIELD_IDs["MASTER_SEED"]:
             master_seed = stringify_hex(data[index:index+uSize])
+            index += uSize
 
-        if btFieldID == 5:
+        elif btFieldID == FIELD_IDs["TRANSFORM_SEED"]:
             transform_seed = stringify_hex(data[index:index+uSize])
+            index += uSize
 
-        if btFieldID == 6:
-            transform_rounds = struct.unpack("Q", data[index:index+8])[0]
+        elif btFieldID == FIELD_IDs["TRANSFORM_ROUNDS"]:
+            # fFor transform_rounds, uSize should always be 8.
+            if uSize != 8:
+                raise ValueError("Invalid uSize for field 'transform_rounds'.")
+            transform_rounds, index = safe_unpack("Q", data, index)
 
-        if btFieldID == 7:
+        elif btFieldID == FIELD_IDs["IV_PARAMETERS"]:
             iv_parameters = stringify_hex(data[index:index+uSize])
+            index += uSize
 
-        if btFieldID == 9:
+        elif btFieldID == FIELD_IDs["EXPECTED_START_BYTES"]:
             expected_start_bytes = stringify_hex(data[index:index+uSize])
+            index += uSize
 
-        index += uSize
+        else:
+            # Skip unknown field ids.
+            sys.stderr.write(f"Warning: Unknown field ID encountered: {btFieldID}."
+                             "This may indicate a newer KeePass file format. \n")
+            index += uSize
 
     dataStartOffset = index
     firstEncryptedBytes = stringify_hex(data[index:index+32])
