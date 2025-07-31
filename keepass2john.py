@@ -134,6 +134,8 @@ def process_2x_database(data, database_name):
 
         else:
             # Skip unknown field ids.
+            sys.stderr.write(f"Warning: Unknown field ID encountered: {btFieldID}."
+                             "This may indicate a newer KeePass file format. \n")
             index += uSize
 
     dataStartOffset = index
