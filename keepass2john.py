@@ -80,28 +80,37 @@ def process_2x_database(data, database_name):
     iv_parameters = b''
     expected_start_bytes = b''
 
+    FIELD_IDs = {
+        'END': 0,
+        'MASTER_SEED': 4,
+        'TRANSFORM_SEED': 5,
+        'TRANSFORM_ROUNDS': 6,
+        'IV_PARAMETERS': 7,
+        'EXPECTED_START_BYTES': 9
+    }
+
     while not end_reached:
         btFieldID = struct.unpack("B", data[index:index+1])[0]
         index += 1
         uSize = struct.unpack("H", data[index:index+2])[0]
         index += 2
 
-        if btFieldID == 0:
+        if btFieldID == FIELD_IDs["END"]:
             end_reached = True
 
-        if btFieldID == 4:
+        elif btFieldID == FIELD_IDs["MASTER_SEED"]:
             master_seed = stringify_hex(data[index:index+uSize])
 
-        if btFieldID == 5:
+        elif btFieldID == FIELD_IDs["TRANSFORM_SEED"]:
             transform_seed = stringify_hex(data[index:index+uSize])
 
-        if btFieldID == 6:
+        elif btFieldID == FIELD_IDs["TRANSFORM_ROUNDS"]:
             transform_rounds = struct.unpack("Q", data[index:index+8])[0]
 
-        if btFieldID == 7:
+        elif btFieldID == FIELD_IDs["IV_PARAMETERS"]:
             iv_parameters = stringify_hex(data[index:index+uSize])
 
-        if btFieldID == 9:
+        elif btFieldID == FIELD_IDs["EXPECTED_START_BYTES"]:
             expected_start_bytes = stringify_hex(data[index:index+uSize])
 
         index += uSize
